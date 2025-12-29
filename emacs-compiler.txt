@@ -1,0 +1,152 @@
+| 项目                 | Apple Silicon (M1/M2/M3) | Intel Mac    |
+| ------------------- | ------------------------  | ------------ |
+| emacs-plus patch    | ✅ 支持                     | ✅ 支持         |
+| no-titlebar / round | ✅                        | ✅            |
+| native-comp         | ✅                        | ✅            |
+| 编译流程             | **99% 相同**               | **99% 相同**   |
+| Homebrew 路径        | `/opt/homebrew`          | `/usr/local` |
+| libgccjit           | 稍麻烦一点                    | **最稳**       |
+
+# 源码目录
+~/src/emacs-plus/
+├── emacs/                 # 官方 emacs 源码
+├── homebrew-emacs-plus/   # 只用来取 patch & icon
+├── build/                 # 编译目录（可选）
+└── build.sh               # 一键脚本
+
+
+# 准备环境（必做）
+$ xcode-select --install
+$ clang --version
+$ brew install gnutls gnu-sed autoconf automake texinfo pkg-config libxml2 jansson gmp imagemagick tree-sitter libgccjit librsvg webp
+
+$ brew info libgccjit
+
+# 验证：libgccjit
+$ ls $(brew --prefix libgccjit)/lib/gcc/current
+
+$ brew install tree-sitter tree-sitter@0.25 tree-sitter-cli
+$ brew unlink tree-sitter 
+$ brew link --overwrite tree-sitter@0.25
+
+
+# 验证：tree-sitter
+$ pkg-config --modversion tree-sitter
+
+> configure 阶段必须看到：
+> checking for libgccjit... yes
+
+# 9️⃣ Cocoa / NS 支持（macOS GUI 的根）
+--with-ns
+--without-x
+
+⚠️ 如果你装了 XQuartz，却没加 --without-x
+可能会得到 X11 Emacs（你绝对不想要）
+
+
+# 1️⃣ brew prefix（唯一必须区分）
+$ BREW_PREFIX=$(brew --prefix)
+> Apple 芯片：/opt/homebrew
+> Intel：/usr/local
+
+# Apple 芯片（更容易踩坑）
+$ export LIBRARY_PATH="$BREW_PREFIX/opt/libgccjit/lib/gcc/current"
+$ export CPATH="$BREW_PREFIX/opt/libgccjit/include"
+
+# 在 macOS 默认只测试 clang, 建议显式指定（避免被 brew gcc 污染）：
+$ export CC=clang
+$ export CXX=clang++
+
+# Intel（通常不用）
+
+# 确认正确的 SDK & macOS 版本
+# xcrun --show-sdk-path
+
+# 3️⃣ 安装 prefix（建议分开）
+> Apple 芯片 : /opt/emacs-plus-30-arm
+> Intel      : /opt/emacs-plus-30-intel
+
+# 下载仓库
+$ git clone https://git.savannah.gnu.org/git/emacs.git
+$ cd emacs
+$ git checkout emacs-30
+
+# 生成 configure（源码仓库需要）
+$ ./autogen.sh
+
+# 配置编译参数（重点）
+$ ./configure \
+  --with-ns \ 					# macOS 原生 GUI（必须）
+  --with-native-compilation \ 	# 启用 native-comp
+  --with-json \ 				# LSP / modern packages
+  --with-tree-sitter \ 			# Doom 必备
+  --with-modules \ 				# Emacs modules
+  --with-gnutls \ 
+  --with-imagemagick \ 			# 图片支持
+  --without-x \
+  --prefix=/opt/emacs-30-$(uname -m) 		避免污染系统
+
+$ make -j$(sysctl -n hw.ncpu)
+$ make install
+
+$ sudo make install
+
+$ /opt/emacs-30/bin/emacs --version
+
+# 生成 macOS App（强烈推荐）
+$ make install
+$ make mac-app
+
+# 生成位置：
+> nextstep/Emacs.app
+
+# 复制到 Applications：
+$ cp -R nextstep/Emacs.app /Applications/
+
+# PATH & emacsclient（很重要）
+$ echo 'export PATH="/opt/emacs-30/bin:$PATH"' >> ~/.zshrc
+$ source ~/.zshrc
+
+# 验证：
+$ which emacs
+$ emacs --version
+
+# 验证 native-comp 是否真的启用, 在 Emacs 里执行：
+> M+x (native-comp-available-p)
+
+返回：
+t
+
+以及：
+comp-version
+
+# Doom Emacs 特别注意（你用得很多）
+$ rm -rf ~/.emacs.d/.local/cache/eln/
+$ rm -rf ~/.cache/emacs/eln-cache/
+
+$ Doom sync
+$ ~/.emacs.d/bin/doom sync
+
+# 确认 Doom 用的是新 Emacs
+$ doom doctor
+
+# 常见坑（macOS 专属）
+❌ configure 找不到 libgccjit
+$ brew install libgccjit
+export LIBRARY_PATH="$(brew --prefix libgccjit)/lib/gcc/current:$LIBRARY_PATH"
+
+❌ 编译成功但无 native-comp
+👉 99% 是 configure 时没检测到 gccjit
+检查：
+$ ./configure | grep -i jit
+
+必须看到：
+> checking for libgccjit... yes
+
+❌ Emacs.app 启动慢 / eln 报错
+defaults write org.gnu.Emacs NSAppSleepDisabled -bool YES
+
+
+
+
+

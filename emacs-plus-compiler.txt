@@ -1,0 +1,107 @@
+# emacs-plus 到底「多了什么」
+核心 patch 包括：
+| 功能                  | 说明                 |
+| ------------------- | ------------------ |
+| 🍎 no-titlebar      | 隐藏标题栏，client-style |
+| 🪟 round-corner     | macOS 圆角           |
+| 🎨 icon patch       | 更好看的 Emacs.app     |
+| 🚀 fast native-comp | 针对 macOS 的 JIT 修复  |
+| 🧠 smoother frame   | NS 行为修复            |
+
+# 准备环境（和你现在几乎一致）
+brew install \
+  autoconf texinfo pkg-config \
+  gmp libgccjit \
+  tree-sitter \
+  libxml2 jansson \
+  imagemagick librsvg webp
+
+# 获取 emacs-plus 的 patch（关键）
+# git clone https://github.com/d12frosted/homebrew-emacs-plus.git
+
+# patch 在这里：
+homebrew-emacs-plus/patches/emacs-30/
+
+# 常见文件（会看到类似）：
+emacs-30-no-titlebar.patch
+emacs-30-round-undecorated-frame.patch
+emacs-30-native-comp.patch
+emacs-30-fix-window-role.patch
+
+# 获取 Emacs 源码（必须对应版本）
+$ git clone https://git.savannah.gnu.org/git/emacs.git
+$ cd emacs
+$ git checkout emacs-30
+
+# 应用 patch（⚠️顺序很重要）
+进入 Emacs 源码目录：
+PATCH_DIR=../homebrew-emacs-plus/patches/emacs-30
+
+# 推荐 patch 顺序（实测稳定）
+patch -p1 < $PATCH_DIR/emacs-30-no-titlebar.patch
+patch -p1 < $PATCH_DIR/emacs-30-round-undecorated-frame.patch
+patch -p1 < $PATCH_DIR/emacs-30-fix-window-role.patch
+patch -p1 < $PATCH_DIR/emacs-30-native-comp.patch
+
+验证：
+$ git status
+
+# 配置（完全 emacs-plus 风格）
+./autogen.sh
+
+./configure \
+  --with-ns \
+  --with-native-compilation \
+  --with-tree-sitter \
+  --with-json \
+  --with-modules \
+  --with-imagemagick \
+  --with-gnutls \
+  --without-x \
+  --prefix=/opt/emacs-plus-30-$(uname -m)
+
+# 编译 & App 生成
+make -j$(sysctl -n hw.ncpu)
+make install
+make mac-app
+
+生成：
+nextstep/Emacs.app
+
+> 替换 icon（emacs-plus 同款）
+icon 路径：
+homebrew-emacs-plus/icons/Emacs.icns
+
+替换：
+cp ../homebrew-emacs-plus/icons/Emacs.icns \
+   nextstep/Emacs.app/Contents/Resources/
+
+刷新 Finder：
+$ touch nextstep/Emacs.app
+
+复制：
+cp -R nextstep/Emacs.app /Applications/Emacs-Plus.app
+
+# 验证 emacs-plus 特性
+1️⃣ 无标题栏
+(frame-parameter nil 'undecorated)
+
+应返回：
+t
+
+2️⃣ native-comp
+(native-comp-available-p)
+
+3️⃣ Doom 兼容性
+rm -rf ~/.emacs.d/.local/cache/eln/
+~/.emacs.d/bin/doom sync
+
+# 可选：完全复刻 emacs-plus 的行为
+🚫 禁止 App Nap
+defaults write org.gnu.Emacs NSAppSleepDisabled -bool YES
+
+🧠 client 模式更顺滑
+defaults write org.gnu.Emacs EmacsFrameTitle -string ""
+
+
+
